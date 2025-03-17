@@ -1,8 +1,10 @@
 import os
 import requests
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
 
 GITHUB_API_URL = "https://api.github.com"
+load_dotenv()
 
 def authenticate():
     """
@@ -12,7 +14,8 @@ def authenticate():
     """
     token = os.getenv("GITHUB_TOKEN")
     if not token:
-        raise ValueError("GitHub token not found. Set GITHUB_TOKEN as an environment variable.")
+        raise ValueError("GitHub token not found. Set GITHUB_TOKEN in your .env file.")
+    
     return {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
 
 
