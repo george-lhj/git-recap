@@ -15,9 +15,7 @@ def authenticate():
     token = os.getenv("GITHUB_TOKEN")
     if not token:
         raise ValueError("GitHub token not found. Set GITHUB_TOKEN in your .env file.")
-    
     return {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
-
 
 def get_time_range(start_date=None, end_date=None):
     """
@@ -37,7 +35,6 @@ def get_time_range(start_date=None, end_date=None):
         tuple: (start_date, end_date) in YYYY-MM-DD format.
     """
     today = datetime.today()
-
     if not start_date:
         start_date = today - timedelta(days=today.weekday() + 1)
     if not end_date:
@@ -50,6 +47,34 @@ def get_time_range(start_date=None, end_date=None):
 
     return start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")
 
+def fetch_active_repositories(username, months=6):
+    """
+    Fetch repositories where the user has been active in the past X months.
+    Args:
+        username (str): GitHub username.
+        months (int): Number of months to look back for activity.
+    Returns:
+        list: List of unique repository names where the user has been active.
+    """
+    cutoff_date = (datetime.now() - timedelta(days=30 * months)).isoformat()
+    events_url = f"{GITHUB_API_URL}/users/{username}/events"
+    headers = authenticate()
+    response = requests.get(events_url, headers=headers)
+    if response.status_code != 200:
+        print(f"Error fetching events: {response.status_code}, {response.text}")
+        return []
+    events = response.json()
+
+    active_repos = set()
+    for event in events:
+        created_at = event.get("created_at")
+        if created_at and created_at >= cutoff_date:
+            repo_name = event.get("repo", {}).get("name")
+            if repo_name:
+                active_repos.add(repo_name)
+
+    return list(active_repos)
+
 def fetch_commits(owner, repo, start_date, end_date):
     """
     Fetch commits from a GitHub repository within a specific date range.
@@ -59,7 +84,7 @@ def fetch_commits(owner, repo, start_date, end_date):
         start_date (str): Start date in YYYY-MM-DD format.
         end_date (str): End date in YYYY-MM-DD format.
     Returns:
-        list: List of commits.
+        list: List of commit objects.
     """
     url = f"{GITHUB_API_URL}/repos/{owner}/{repo}/commits"
     params = {"since": f"{start_date}T00:00:00Z", "until": f"{end_date}T23:59:59Z"}
@@ -69,71 +94,165 @@ def fetch_commits(owner, repo, start_date, end_date):
     else:
         print(f"Error fetching commits: {response.status_code}, {response.text}")
         return []
-    
-def fetch_pull_requests(owner, repo, start_date, end_date):
+
+def fetch_pull_requests(owner, repo, username, start_date, end_date):
     """
-    Fetch pull requests from a GitHub repository within a specific date range.
+    Fetch pull requests created by the user from a GitHub repository within a specific date range.
     Args:
         owner (str): Repository owner.
         repo (str): Repository name.
+        username (str): GitHub username of the user.
         start_date (str): Start date in YYYY-MM-DD format.
         end_date (str): End date in YYYY-MM-DD format.
     Returns:
-        list: List of pull requests.
+        list: List of pull request objects created by the user.
     """
     url = f"{GITHUB_API_URL}/repos/{owner}/{repo}/pulls"
     params = {"state": "all", "sort": "updated", "direction": "desc"}
     response = requests.get(url, headers=authenticate(), params=params)
     if response.status_code == 200:
         prs = response.json()
-        return [pr for pr in prs if start_date <= pr["created_at"][:10] <= end_date]
+        return [
+            pr for pr in prs
+            if start_date <= pr["created_at"][:10] <= end_date
+            and pr["user"]["login"] == username
+        ]
     else:
         print(f"Error fetching PRs: {response.status_code}, {response.text}")
         return []
 
-def fetch_reviews(owner, repo, pr_number):
+def fetch_reviews_by_user(owner, repo, pr_number, username):
     """
-    Fetch reviews for a given pull request.
+    Fetch detailed information about reviews performed by the user for a given pull request.
     Args:
         owner (str): Repository owner.
         repo (str): Repository name.
         pr_number (int): Pull request number.
+        username (str): GitHub username of the user performing the review.
     Returns:
-        list: List of reviews for the PR.
+        list: List of reviews performed by the user for the PR.
     """
     url = f"{GITHUB_API_URL}/repos/{owner}/{repo}/pulls/{pr_number}/reviews"
     response = requests.get(url, headers=authenticate())
     if response.status_code == 200:
-        return response.json()
+        reviews = response.json()
+        return [review for review in reviews if review["user"]["login"] == username]
     else:
         print(f"Error fetching reviews for PR {pr_number}: {response.status_code}, {response.text}")
         return []
-    
-def fetch_github_activity(owner, repo, start_date=None, end_date=None):
+
+def fetch_issues(owner, repo, username, start_date, end_date):
     """
-    Fetch commits, pull requests, and reviews from a GitHub repository in a given time range.
+    Fetch issues created by the user from a GitHub repository within a specific date range.
     Args:
         owner (str): Repository owner.
         repo (str): Repository name.
+        username (str): GitHub username of the user.
+        start_date (str): Start date in YYYY-MM-DD format.
+        end_date (str): End date in YYYY-MM-DD format.
+    Returns:
+        list: List of issue objects created by the user.
+    """
+    url = f"{GITHUB_API_URL}/repos/{owner}/{repo}/issues"
+    params = {"state": "all", "sort": "created", "direction": "desc"}
+    response = requests.get(url, headers=authenticate(), params=params)
+    if response.status_code == 200:
+        issues = response.json()
+        return [
+            issue for issue in issues
+            if start_date <= issue["created_at"][:10] <= end_date
+            and issue["user"]["login"] == username
+        ]
+    else:
+        print(f"Error fetching issues: {response.status_code}, {response.text}")
+        return []
+
+def process_commit(commit):
+    """
+    Process a commit object to extract relevant details.
+    Args:
+        commit (dict): Commit object from GitHub API.
+    Returns:
+        dict: Simplified commit details.
+    """
+    return {
+        "message": commit["commit"]["message"],
+        "date": commit["commit"]["author"]["date"]
+    }
+
+def process_pull_request(pr):
+    """
+    Process a pull request object to extract relevant details.
+    Args:
+        pr (dict): Pull request object from GitHub API.
+    Returns:
+        dict: Simplified pull request details.
+    """
+    return {
+        "title": pr["title"],
+        "state": pr["state"],
+        "created_at": pr["created_at"],
+        "description": pr["body"],
+        "labels": [label["name"] for label in pr["labels"]],
+        "assignees": [assignee["login"] for assignee in pr["assignees"]]
+    }
+
+def process_issue(issue):
+    """
+    Process an issue object to extract relevant details.
+    Args:
+        issue (dict): Issue object from GitHub API.
+    Returns:
+        dict: Simplified issue details.
+    """
+    return {
+        "title": issue["title"],
+        "state": issue["state"],
+        "created_at": issue["created_at"],
+        "description": issue["body"],
+        "labels": [label["name"] for label in issue["labels"]],
+        "assignees": [assignee["login"] for assignee in issue["assignees"]]
+    }
+
+def fetch_github_activity(owner, repo, username, start_date=None, end_date=None):
+    """
+    Fetch detailed commits, pull requests, reviews, and issues from a GitHub repository in a given time range.
+    Args:
+        owner (str): Repository owner.
+        repo (str): Repository name.
+        username (str): GitHub username of the user.
         start_date (str, optional): Custom start date (YYYY-MM-DD).
         end_date (str, optional): Custom end date (YYYY-MM-DD).
     Returns:
-        dict: Dictionary containing commits, PRs, and reviews.
+        dict: Dictionary containing simplified commits, PRs, reviews, and issues.
     """
     start_date, end_date = get_time_range(start_date, end_date)
 
     print(f"Fetching GitHub activity from {start_date} to {end_date}...")
 
-    commits = fetch_commits(owner, repo, start_date, end_date)
-    prs = fetch_pull_requests(owner, repo, start_date, end_date)
+    # Fetch detailed commits
+    raw_commits = fetch_commits(owner, repo, start_date, end_date)
+    commits = [process_commit(commit) for commit in raw_commits]
 
+    # Fetch detailed pull requests created by the user
+    raw_prs = fetch_pull_requests(owner, repo, username, start_date, end_date)
+    prs = [process_pull_request(pr) for pr in raw_prs]
+
+    # Fetch detailed reviews performed by the user
     reviews = {}
-    for pr in prs:
+    for pr in raw_prs:
         pr_number = pr["number"]
-        reviews[pr_number] = fetch_reviews(owner, repo, pr_number)
+        user_reviews = fetch_reviews_by_user(owner, repo, pr_number, username)
+        if user_reviews:
+            reviews[pr_number] = [{"state": review["state"], "body": review["body"]} for review in user_reviews]
+
+    # Fetch detailed issues created by the user
+    raw_issues = fetch_issues(owner, repo, username, start_date, end_date)
+    issues = [process_issue(issue) for issue in raw_issues]
 
     return {
         "commits": commits,
         "pull_requests": prs,
-        "reviews": reviews
+        "reviews": reviews,
+        "issues": issues
     }
