@@ -56,3 +56,63 @@ def save_activity_as_markdown(all_activity, filename="github_activity_summary.md
                 f.write("- No issues found.\n")
             f.write("\n")
     print(f"\nGitHub activity summary saved to {filename}")
+
+def format_activity_as_markdown(all_activity):
+    """
+    Converts activity data to markdown format without saving to a file.
+    Returns the markdown content as a string.
+    """
+    markdown_lines = ["# GitHub Activity Summary\n"]
+    
+    for repo_name, activity in all_activity.items():
+        markdown_lines.append(f"## Repository: {repo_name}\n")
+    
+        markdown_lines.append("### Commits\n")
+        if activity.get("commits"):
+            for commit in activity["commits"]:
+                markdown_lines.append(f"- **Message**: {commit.get('message', 'No message')}")
+                markdown_lines.append(f"  - **Date**: {commit.get('date', 'Unknown Date')}")
+        else:
+            markdown_lines.append("- No commits found.")
+        
+        markdown_lines.append("\n### Pull Requests\n")
+        if activity.get("pull_requests"):
+            for pr in activity["pull_requests"]:
+                markdown_lines.append(f"- **Title**: {pr.get('title', 'No title')}")
+                markdown_lines.append(f"  - **State**: {pr.get('state', 'Unknown State')}")
+                markdown_lines.append(f"  - **Created At**: {pr.get('created_at', 'Unknown Date')}")
+                markdown_lines.append(f"  - **Description**: {pr.get('description', 'No description provided.')}")
+                if pr.get("labels"):
+                    markdown_lines.append(f"  - **Labels**: {', '.join(pr['labels'])}")
+                if pr.get("assignees"):
+                    markdown_lines.append(f"  - **Assignees**: {', '.join(pr['assignees'])}")
+        else:
+            markdown_lines.append("- No pull requests found.")
+
+        markdown_lines.append("\n### Reviews I Performed\n")
+        if activity.get("reviews"):
+            for pr_number, review_list in activity["reviews"].items():
+                for review in review_list:
+                    markdown_lines.append(f"- **PR #{pr_number}**")
+                    markdown_lines.append(f"  - **State**: {review.get('state', 'Unknown State')}")
+                    markdown_lines.append(f"  - **Body**: {review.get('body', 'No review comments provided.')}")
+        else:
+            markdown_lines.append("- No reviews performed.")
+
+        markdown_lines.append("\n### Issues\n")
+        if activity.get("issues"):
+            for issue in activity["issues"]:
+                markdown_lines.append(f"- **Title**: {issue.get('title', 'No title')}")
+                markdown_lines.append(f"  - **State**: {issue.get('state', 'Unknown State')}")
+                markdown_lines.append(f"  - **Created At**: {issue.get('created_at', 'Unknown Date')}")
+                markdown_lines.append(f"  - **Description**: {issue.get('description', 'No description provided.')}")
+                if issue.get("labels"):
+                    markdown_lines.append(f"  - **Labels**: {', '.join(issue['labels'])}")
+                if issue.get("assignees"):
+                    markdown_lines.append(f"  - **Assignees**: {', '.join(issue['assignees'])}")
+        else:
+            markdown_lines.append("- No issues found.")
+
+        markdown_lines.append("\n")  # Separate repositories with a newline
+    
+    return "\n".join(markdown_lines)
