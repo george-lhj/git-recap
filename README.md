@@ -1,8 +1,8 @@
 # git-recap
 
-This repository provides tools to fetch your GitHub activity (commits, pull requests, issues, and reviews) for a specified time range and generate a concise weekly summary. The summary is formatted to align with your team's weekly standup reports, making it easy to share updates during meetings.
+This repository provides tools to fetch your GitHub activity (commits, pull requests, issues, and reviews) for a specified time range and generate a concise weekly summary. The summary is formatted to align with the team's weekly standup reports, making it easy to share updates during meetings.
 
-Using Ollama , a local LLM (Large Language Model), the tool processes the fetched GitHub data and generates human-readable summaries in a structured format.
+Using Ollama, the tool processes the fetched GitHub data and generates human-readable summaries in a structured format.
 
 ## Features
 
