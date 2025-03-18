@@ -72,17 +72,3 @@ def summarize_with_ollama(content, model_name=MODEL_NAME):
 
     except requests.exceptions.RequestException as e:
         raise Exception(f"Failed to connect to Ollama: {e}")
-
-
-
-input_file = "github_activity_summary.md"
-
-try:
-    markdown_content = read_markdown_file(input_file)
-    print("Generating weekly summary with Ollama...")
-    summary = summarize_with_ollama(markdown_content)
-    print(summary)
-except FileNotFoundError as e:
-    print(e)
-except Exception as e:
-    print(f"An error occurred: {e}")
